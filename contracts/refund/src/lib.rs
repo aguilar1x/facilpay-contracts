@@ -24,6 +24,8 @@ pub enum Error {
     RefundNotFound = 2,
     Unauthorized = 3,
     InvalidPaymentId = 4,
+    InvalidStatus = 5,
+    AlreadyProcessed = 6,
 }
 
 #[contractevent]
@@ -35,6 +37,23 @@ pub struct RefundRequested {
     pub customer: Address,
     pub amount: i128,
     pub token: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefundApproved {
+    pub refund_id: u64,
+    pub approved_by: Address,
+    pub approved_at: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefundRejected {
+    pub refund_id: u64,
+    pub rejected_by: Address,
+    pub rejected_at: u64,
+    pub rejection_reason: String,
 }
 
 #[derive(Clone)]
@@ -128,6 +147,82 @@ impl RefundContract {
             .instance()
             .get(&DataKey::Refund(refund_id))
             .ok_or(Error::RefundNotFound)
+    }
+
+    pub fn approve_refund(env: Env, admin: Address, refund_id: u64) -> Result<(), Error> {
+        // Require admin authentication
+        admin.require_auth();
+
+        // Retrieve refund from storage
+        let mut refund: Refund = env
+            .storage()
+            .instance()
+            .get(&DataKey::Refund(refund_id))
+            .ok_or(Error::RefundNotFound)?;
+
+        // Check refund status is Requested
+        if refund.status != RefundStatus::Requested {
+            return Err(Error::InvalidStatus);
+        }
+
+        // Update refund status to Approved
+        refund.status = RefundStatus::Approved;
+
+        // Store updated refund back to storage
+        env.storage()
+            .instance()
+            .set(&DataKey::Refund(refund_id), &refund);
+
+        // Emit RefundApproved event
+        RefundApproved {
+            refund_id,
+            approved_by: admin,
+            approved_at: env.ledger().timestamp(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    pub fn reject_refund(
+        env: Env,
+        admin: Address,
+        refund_id: u64,
+        rejection_reason: String,
+    ) -> Result<(), Error> {
+        // Require admin authentication
+        admin.require_auth();
+
+        // Retrieve refund from storage
+        let mut refund: Refund = env
+            .storage()
+            .instance()
+            .get(&DataKey::Refund(refund_id))
+            .ok_or(Error::RefundNotFound)?;
+
+        // Check refund status is Requested
+        if refund.status != RefundStatus::Requested {
+            return Err(Error::InvalidStatus);
+        }
+
+        // Update refund status to Rejected
+        refund.status = RefundStatus::Rejected;
+
+        // Store updated refund back to storage
+        env.storage()
+            .instance()
+            .set(&DataKey::Refund(refund_id), &refund);
+
+        // Emit RefundRejected event
+        RefundRejected {
+            refund_id,
+            rejected_by: admin,
+            rejected_at: env.ledger().timestamp(),
+            rejection_reason,
+        }
+        .publish(&env);
+
+        Ok(())
     }
 }
 
