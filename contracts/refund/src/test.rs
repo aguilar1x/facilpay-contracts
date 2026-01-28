@@ -286,3 +286,320 @@ fn test_request_refund_with_reason() {
     assert_eq!(refund.reason, reason);
     assert_eq!(refund.status, RefundStatus::Requested);
 }
+
+// Test approve_refund functionality
+#[test]
+fn test_approve_requested_refund_successfully() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.approve_refund(&admin, &refund_id);
+
+    let refund = client.get_refund(&refund_id);
+    assert_eq!(refund.status, RefundStatus::Approved);
+}
+
+#[test]
+fn test_reject_requested_refund_successfully() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+    let rejection_reason = String::from_str(&env, "Insufficient evidence");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+
+    let refund = client.get_refund(&refund_id);
+    assert_eq!(refund.status, RefundStatus::Rejected);
+}
+
+#[test]
+#[should_panic]
+fn test_approve_nonexistent_refund_should_fail() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let nonexistent_refund_id = 999u64;
+
+    env.mock_all_auths();
+    client.approve_refund(&admin, &nonexistent_refund_id);
+}
+
+#[test]
+#[should_panic]
+fn test_reject_nonexistent_refund_should_fail() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let rejection_reason = String::from_str(&env, "Test reason");
+    let nonexistent_refund_id = 999u64;
+
+    env.mock_all_auths();
+    client.reject_refund(&admin, &nonexistent_refund_id, &rejection_reason);
+}
+
+#[test]
+#[should_panic]
+fn test_approve_already_approved_refund_should_fail() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.approve_refund(&admin, &refund_id);
+    client.approve_refund(&admin, &refund_id);
+}
+
+#[test]
+#[should_panic]
+fn test_reject_already_rejected_refund_should_fail() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+    let rejection_reason = String::from_str(&env, "Insufficient evidence");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+}
+
+#[test]
+#[should_panic]
+fn test_approve_rejected_refund_should_fail() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+    let rejection_reason = String::from_str(&env, "Insufficient evidence");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+    client.approve_refund(&admin, &refund_id);
+}
+
+#[test]
+#[should_panic]
+fn test_reject_approved_refund_should_fail() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+    let rejection_reason = String::from_str(&env, "Insufficient evidence");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.approve_refund(&admin, &refund_id);
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+}
+
+#[test]
+fn test_refund_approved_event_is_emitted() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.approve_refund(&admin, &refund_id);
+
+    let events = env.events().all();
+    assert!(events.len() > 0);
+}
+
+#[test]
+fn test_refund_rejected_event_is_emitted() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+    let rejection_reason = String::from_str(&env, "Insufficient evidence");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+
+    let events = env.events().all();
+    assert!(events.len() > 0);
+}
+
+#[test]
+fn test_approve_correct_refund_among_multiple() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+
+    env.mock_all_auths();
+
+    let refund_id1 = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+    let refund_id2 = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+    let refund_id3 = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.approve_refund(&admin, &refund_id2);
+
+    let refund1 = client.get_refund(&refund_id1);
+    let refund2 = client.get_refund(&refund_id2);
+    let refund3 = client.get_refund(&refund_id3);
+
+    assert_eq!(refund1.status, RefundStatus::Requested);
+    assert_eq!(refund2.status, RefundStatus::Approved);
+    assert_eq!(refund3.status, RefundStatus::Requested);
+}
+
+#[test]
+fn test_reject_refund_with_empty_reason() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+    let rejection_reason = String::from_str(&env, "");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+
+    let refund = client.get_refund(&refund_id);
+    assert_eq!(refund.status, RefundStatus::Rejected);
+}
+
+#[test]
+fn test_reject_refund_with_detailed_reason() {
+    let env = Env::default();
+    let contract_id = env.register(RefundContract, ());
+    let client = RefundContractClient::new(&env, &contract_id);
+
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let payment_id = 1u64;
+    let amount = 1000i128;
+    let reason = String::from_str(&env, "Test reason");
+    let rejection_reason = String::from_str(&env, "Insufficient evidence provided by merchant");
+
+    env.mock_all_auths();
+
+    let refund_id = client
+        .request_refund(&merchant, &payment_id, &customer, &amount, &token, &reason);
+
+    client.reject_refund(&admin, &refund_id, &rejection_reason);
+
+    let refund = client.get_refund(&refund_id);
+    assert_eq!(refund.status, RefundStatus::Rejected);
+}
